@@ -5,8 +5,9 @@
 python-telegram-bot==20.3
 telegram==0.0.1
 
-# Scheduling
+# Scheduling (APScheduler используется через встроенный JobQueue бота)
 APScheduler==3.10.4
+pytz>=2018.6
 
 # News Fetching
 feedparser==6.0.10

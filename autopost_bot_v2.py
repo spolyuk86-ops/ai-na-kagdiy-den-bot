@@ -7,11 +7,10 @@ AutoPost Bot v2.0 - Telegram канал @AI_NA_KAGDIY_DEN
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, time as dtime
 from pathlib import Path
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
+import pytz
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -191,8 +190,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # АВТОПОСТИНГ
 # ============================================================================
 
-async def publish_post(bot: Bot):
-    """Опубликовать следующий пост в канал"""
+async def publish_post(context: ContextTypes.DEFAULT_TYPE):
+    """Опубликовать следующий пост в канал (вызывается PTB JobQueue)"""
+    bot = context.bot
     post_data, index = get_next_post()
     
     if not post_data:
@@ -244,52 +244,67 @@ async def publish_post(bot: Bot):
 # ============================================================================
 
 def setup_scheduler(app: Application):
-    """Настроить автопостинг по расписанию"""
-    scheduler = BackgroundScheduler(timezone="Europe/Kyiv")
-    bot = app.bot
-    
-    # Добавить задачи для каждого времени
+    """
+    Настроить автопостинг через встроенный JobQueue бота (PTB v20).
+
+    ВАЖНО: раньше здесь использовался отдельный apscheduler.BackgroundScheduler
+    с async-функцией publish_post в качестве колбэка. BackgroundScheduler
+    синхронный и не умеет await'ить корутины — job "выполнялся", но тело
+    publish_post никогда реально не запускалось (корутина создавалась и
+    сразу отбрасывалась). JobQueue бота — это тот же APScheduler, но
+    интегрированный с event loop-ом PTB, поэтому async-колбэки работают
+    корректно "из коробки".
+    """
+    if app.job_queue is None:
+        raise RuntimeError(
+            "❌ JobQueue недоступен. Проверьте что APScheduler установлен "
+            "(требуется для python-telegram-bot[job-queue])."
+        )
+
     for time_str, tz in POSTING_TIMES:
         hours, minutes = map(int, time_str.split(":"))
-        scheduler.add_job(
+        app.job_queue.run_daily(
             publish_post,
-            CronTrigger(hour=hours, minute=minutes, timezone=tz),
-            args=[bot],
-            id=f"post_{time_str}",
-            name=f"Пост в {time_str}",
-            replace_existing=True
+            time=dtime(hour=hours, minute=minutes, tzinfo=pytz.timezone(tz)),
+            name=f"post_{time_str}",
         )
-        logger.info(f"⏰ Запланирован пост на {time_str}")
-    
-    scheduler.start()
+        logger.info(f"⏰ Запланирован пост на {time_str} ({tz})")
+
     logger.info("✅ Планировщик запущен!")
 
 # ============================================================================
 # ГЛАВНАЯ ФУНКЦИЯ
 # ============================================================================
 
-async def main():
-    """Запустить бота"""
+def main():
+    """
+    Запустить бота.
+
+    ВАЖНО: эта функция синхронная и вызывается напрямую (без asyncio.run).
+    Application.run_polling() в python-telegram-bot v20 сам создаёт и
+    полностью управляет своим event loop-ом внутри. Оборачивание её в
+    asyncio.run(...) + await приводит к "RuntimeError: This event loop
+    is already running", так как получаются два конфликтующих loop-а.
+    """
     logger.info("🚀 Запуск AutoPost Bot v2.0...")
-    
+
     # Проверить конфиг
     if not BOT_TOKEN or not CHANNEL_ID:
         raise ValueError("❌ Отсутствуют BOT_TOKEN или CHANNEL_ID!")
-    
+
     # Создать приложение
     app = Application.builder().token(BOT_TOKEN).build()
-    
+
     # Добавить обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_callback))
-    
-    # Запустить планировщик
+
+    # Запустить планировщик (использует app.job_queue)
     setup_scheduler(app)
-    
-    # Запустить polling
-    await app.run_polling()
+
+    # Запустить polling — БЛОКИРУЮЩИЙ синхронный вызов, не await!
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
