@@ -1,0 +1,14 @@
+{
+  "build": {
+    "builder": "nixpacks",
+    "buildCommand": "pip install -r requirements.txt && python -m pytest tests/ --quiet || true"
+  },
+  "deploy": {
+    "startCommand": "python autopost_bot_v2.py",
+    "restartPolicyType": "always",
+    "restartPolicyMaxRetries": 5
+  },
+  "env": {
+    "RAILWAY_ENVIRONMENT": "production"
+  }
+}

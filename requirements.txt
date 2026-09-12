@@ -1,0 +1,30 @@
+# AutoPost Bot v2.0 Requirements
+# Python 3.9+
+
+# Telegram Bot Framework
+python-telegram-bot==20.3
+telegram==0.0.1
+
+# Scheduling
+APScheduler==3.10.4
+
+# News Fetching
+feedparser==6.0.10
+requests==2.31.0
+
+# Data Processing
+python-dotenv==1.0.0
+
+# Async Support
+aiohttp==3.9.0
+aiofiles==23.2.1
+
+# JSON Processing (already in stdlib but good to have)
+ujson==5.8.0
+
+# Logging & Monitoring
+python-json-logger==2.0.7
+
+# Database (optional, for future scaling)
+# sqlalchemy==2.0.21
+# psycopg2-binary==2.9.9

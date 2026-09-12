@@ -1,0 +1,222 @@
+{
+  "partners": [
+    {
+      "id": "openai_chatgpt",
+      "name": "OpenAI ChatGPT Plus",
+      "description": "Премиум версия ChatGPT с улучшенными возможностями",
+      "price": "$20/месяц",
+      "affiliate_rate": "15%",
+      "estimated_monthly_income": "$50-100",
+      "signup_url": "https://chat.openai.com/auth/login?next=%2F",
+      "tracking_method": "referral_code",
+      "content_template": "Использую ChatGPT Plus 8 часов в день для написания промптов. Стоит каждую копейку. Через мою ссылку получите скидку: [ССЫЛКА]",
+      "best_post_type": "case_study",
+      "posting_frequency": "1x в неделю",
+      "status": "active"
+    },
+    {
+      "id": "midjourney",
+      "name": "Midjourney",
+      "description": "AI для генерации изображений высокого качества",
+      "price": "$15-120/месяц",
+      "affiliate_rate": "10%",
+      "estimated_monthly_income": "$30-60",
+      "signup_url": "https://www.midjourney.com/",
+      "tracking_method": "affiliate_link",
+      "content_template": "Заработал $1200 этот месяц рисуя картины в Midjourney. Вот 5 способов:\n1. Продажа на Etsy\n2. Фулл для компаний\n3. Обучение новичков\n\nПодписаться: [ССЫЛКА]",
+      "best_post_type": "how_to_earn",
+      "posting_frequency": "2x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "copy_ai",
+      "name": "Copy.ai",
+      "description": "AI для написания текстов, постов, писем",
+      "price": "$50/месяц",
+      "affiliate_rate": "10%",
+      "estimated_monthly_income": "$30-50",
+      "signup_url": "https://www.copy.ai/",
+      "tracking_method": "referral_code",
+      "content_template": "Copy.ai помогает мне писать 100+ постов в месяц за 30 минут. Без этого инструмента я был бы 10x медленнее. Тест: [ССЫЛКА]",
+      "best_post_type": "tool_review",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "descript",
+      "name": "Descript",
+      "description": "Редактирование видео и аудио с помощью текста",
+      "price": "$15-24/месяц",
+      "affiliate_rate": "15%",
+      "estimated_monthly_income": "$20-40",
+      "signup_url": "https://www.descript.com/",
+      "tracking_method": "affiliate_link",
+      "content_template": "Монтирую видео за 10 минут благодаря Descript. Это как ChatGPT для видео редактора. Попробуйте: [ССЫЛКА]",
+      "best_post_type": "quick_tip",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "canva_pro",
+      "name": "Canva Pro",
+      "description": "Дизайн изображений, видео, документов",
+      "price": "$119/год ($9.9/мес)",
+      "affiliate_rate": "10%",
+      "estimated_monthly_income": "$30-60",
+      "signup_url": "https://www.canva.com/",
+      "tracking_method": "referral_link",
+      "content_template": "Все мои красивые картинки в канале - сделаны за 2 минуты в Canva Pro. Не нужно знать дизайн! Вот как: [ССЫЛКА]",
+      "best_post_type": "visual_example",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "upwork",
+      "name": "Upwork Фриланс",
+      "description": "Платформа для фриланса и поиска клиентов",
+      "price": "Бесплатно (комиссия на работы)",
+      "affiliate_rate": "5-10% от первой работы",
+      "estimated_monthly_income": "$50-150",
+      "signup_url": "https://www.upwork.com/",
+      "tracking_method": "referral_code",
+      "content_template": "На Upwork я заработал $3000 в первый месяц продавая AI сервисы. Вот моя история и как начать: [ССЫЛКА]",
+      "best_post_type": "success_story",
+      "posting_frequency": "2x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "fiverr",
+      "name": "Fiverr",
+      "description": "Фриланс услуги: AI промпты, дизайн, написание текстов",
+      "price": "Бесплатно (комиссия на услуги)",
+      "affiliate_rate": "5% с рефа",
+      "estimated_monthly_income": "$30-80",
+      "signup_url": "https://www.fiverr.com/",
+      "tracking_method": "referral_link",
+      "content_template": "Мой заработок на Fiverr через AI инструменты: $2500/месяц. Начал с нуля 3 месяца назад. Вот план: [ССЫЛКА]",
+      "best_post_type": "income_proof",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "zapier",
+      "name": "Zapier",
+      "description": "Автоматизация задач и интеграция инструментов",
+      "price": "$0-299/месяц",
+      "affiliate_rate": "20%",
+      "estimated_monthly_income": "$20-40",
+      "signup_url": "https://zapier.com/",
+      "tracking_method": "affiliate_link",
+      "content_template": "Zapier + ChatGPT = полная автоматизация рутины. Я экономлю 5 часов в день. Смотрите как: [ССЫЛКА]",
+      "best_post_type": "tutorial",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    },
+    {
+      "id": "notion_plus",
+      "name": "Notion",
+      "description": "Управление проектами и создание баз данных",
+      "price": "$4/месяц на человека",
+      "affiliate_rate": "25%",
+      "estimated_monthly_income": "$10-30",
+      "signup_url": "https://www.notion.so/",
+      "tracking_method": "referral_link",
+      "content_template": "Организую весь свой AI бизнес в Notion. Шаблоны для продаж, учёта доходов, отслеживания задач. Скачать: [ССЫЛКА]",
+      "best_post_type": "template_offer",
+      "posting_frequency": "1x в месяц",
+      "status": "active"
+    }
+  ],
+  "content_calendar": {
+    "monday": {
+      "theme": "💰 Заработок",
+      "format": "Income proof или case study",
+      "example_title": "Как я заработал $1000 на AI в этом месяце",
+      "recommended_partners": ["upwork", "fiverr", "midjourney"]
+    },
+    "wednesday": {
+      "theme": "🛠️ Инструменты",
+      "format": "Tool review",
+      "example_title": "5 AI инструментов которые я использую каждый день",
+      "recommended_partners": ["chatgpt", "copy_ai", "canva_pro"]
+    },
+    "friday": {
+      "theme": "📚 Образование",
+      "format": "Tutorial или How-to",
+      "example_title": "Как начать с нуля и заработать на ChatGPT",
+      "recommended_partners": ["openai_chatgpt", "descript", "zapier"]
+    },
+    "sunday": {
+      "theme": "📈 Истории успеха",
+      "format": "Success story",
+      "example_title": "История из комментариев: как подписчик заработал $500",
+      "recommended_partners": ["all"]
+    }
+  },
+  "email_sequences": [
+    {
+      "day": 1,
+      "subject": "Привет! Вот как я заработал $1200 на AI 🤖",
+      "content": "Привет [Имя]!\n\nСпасибо за подписку на мой канал.\n\nЯ хочу поделиться самым главным - способ которым я зарабатываю деньги.\n\nНедавно я открыл для себя, что ChatGPT + Midjourney = золотой рудник. За этот месяц я:\n✅ Продал 12 картин на Etsy за $1200\n✅ Написал 50 текстов для компаний за $500\n✅ Создал курс про AI промпты\n\nЕсли вас интересует - вот как начать:\n\n1️⃣ Попробуйте ChatGPT Plus: [AFFILIATE_LINK]\n2️⃣ Генерируйте картины в Midjourney: [AFFILIATE_LINK]\n3️⃣ Продавайте на Fiverr: [AFFILIATE_LINK]\n\nВозвращайтесь в канал - там я каждый день делюсь новыми способами.\n\nУспехов! 💜\n---\n@AI_NA_KAGDIY_DEN"
+    },
+    {
+      "day": 3,
+      "subject": "Вы упустили это? ($500 за вечер работы)",
+      "content": "Привет [Имя]!\n\nОчень быстро:\n\nВчера я заработал $500 за 3 часа работы. Вот как:\n\n1. Заказчик в Upwork: \"Нужны картины про технологию\"\n2. Я создал 10 картин в Midjourney за 30 минут\n3. Заказчик счастлив, я получаю $500\n\nЭто может делать каждый.\n\nКлюч: правильный инструмент + правильный маркетплейс\n\n→ Начните с Upwork: [AFFILIATE_LINK]\n→ Midjourney для картин: [AFFILIATE_LINK]\n\nВ канале я показываю пошаговый процесс каждый день.\n\nПодписывайтесь 💜\n@AI_NA_KAGDIY_DEN"
+    },
+    {
+      "day": 7,
+      "subject": "🔓 Открою вам секрет (который стоит $500/месяц)",
+      "content": "Привет [Имя]!\n\nВсе заработки на AI сводятся к одному:\n\nЕсли вы можете создавать (текст, картины, видео) быстрее чем человек - вы можете продавать это дорого.\n\nМне помогают 3 инструмента:\n\n🤖 ChatGPT Plus ($20) - пишу 10x быстрее\n🎨 Midjourney ($15) - рисую картины как дизайнер\n📝 Copy.ai ($50) - готовый контент за секунды\n\nВсе вместе = $85/месяц\n\nМой доход от них: $2000+/месяц\n\nROI: 24x 📈\n\nВот ссылки если захотите попробовать:\n- ChatGPT Plus: [AFFILIATE_LINK]\n- Midjourney: [AFFILIATE_LINK]\n- Copy.ai: [AFFILIATE_LINK]\n\nЯ буду очень благодарен если используете мои ссылки ❤️\n\nВ канале я каждый день показываю как это работает.\n\n@AI_NA_KAGDIY_DEN"
+    },
+    {
+      "day": 14,
+      "subject": "Результаты подписчиков (это вас вдохновит)",
+      "content": "Привет [Имя]!\n\nПолучил письмо от подписчика Ивана:\n\n\"Спасибо за твой канал! Я начал месяц назад, а уже заработал $800 продавая промпты на Fiverr. Это не шутка!\"\n\nВот его шаги:\n1. Подписался на канал\n2. Попробовал мой гайд про ChatGPT\n3. Создал профиль на Fiverr\n4. За месяц 23 заказа по $35\n\nИван начинал с нуля и не знал про AI.\n\nТеперь это его доход.\n\nВы можете делать то же самое.\n\n→ Начните с Fiverr: [AFFILIATE_LINK]\n→ Изучите ChatGPT: [AFFILIATE_LINK]\n\nВ канале 100+ таких историй. Подписывайтесь!\n\n💜 @AI_NA_KAGDIY_DEN"
+    }
+  ],
+  "conversion_tips": {
+    "best_performing_angles": [
+      "Income proof (скриншоты доходов)",
+      "Time saved (сколько часов экономит)",
+      "Before/after примеры",
+      "Success stories от реальных людей",
+      "Сравнение инструментов (A vs B)"
+    ],
+    "posting_rules": [
+      "Не более 1 affiliate ссылки в посте",
+      "Максимум 2 affiliate поста в неделю",
+      "80% полезный контент / 20% монетизация",
+      "Всегда раскрывайте что это affiliate",
+      "Пишите честно - пользуйте то что промотируете"
+    ],
+    "button_placement": {
+      "position": "Конец поста",
+      "text": "Попробовать [Инструмент]",
+      "style": "inline_button",
+      "analytics": "track_every_click"
+    }
+  },
+  "monthly_projection": {
+    "500_subscribers": {
+      "affiliate_income": "$50-100",
+      "conversion_rate": "1-2%",
+      "avg_order_value": "$20-50"
+    },
+    "1000_subscribers": {
+      "affiliate_income": "$200-400",
+      "conversion_rate": "1-2%",
+      "avg_order_value": "$30-70"
+    },
+    "2000_subscribers": {
+      "affiliate_income": "$500-800",
+      "conversion_rate": "1-2%",
+      "avg_order_value": "$40-100"
+    },
+    "5000_subscribers": {
+      "affiliate_income": "$1000-1500",
+      "conversion_rate": "1-2%",
+      "avg_order_value": "$50-150"
+    }
+  }
+}
