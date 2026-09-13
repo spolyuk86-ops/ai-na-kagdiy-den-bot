@@ -6,6 +6,7 @@ AutoPost Bot v2.0 - Telegram канал @AI_NA_KAGDIY_DEN
 
 import json
 import os
+import re
 import logging
 from datetime import datetime, time as dtime
 from pathlib import Path
@@ -13,7 +14,10 @@ from pathlib import Path
 import pytz
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, ContextTypes, filters,
+)
 
 # ============================================================================
 # КОНФИГУРАЦИЯ
@@ -27,11 +31,19 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
+# Посилання на канал (окрема змінна оточення — не хардкодимо в коді,
+# бо канал не має публічного @username, тільки числовий CHANNEL_ID).
+# Якщо не задано — кнопка "Перейти в канал" просто не показується.
+CHANNEL_LINK = os.getenv("CHANNEL_LINK", "").strip()
+
 # Файлы состояния
 POSTS_FILE = STATE_DIR / "posts.json"
 POSTED_INDEX_FILE = STATE_DIR / "posted_index.json"
 CLICKS_FILE = STATE_DIR / "clicks.json"
 AFFILIATE_TRACKING_FILE = STATE_DIR / "affiliate_tracking.json"
+EMAILS_FILE = STATE_DIR / "emails.json"
+
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Временные пояса (Киев)
 POSTING_TIMES = [
@@ -118,11 +130,11 @@ def track_click(button_text, partner, post_id):
 # ============================================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start для нового подписчика"""
+    """Команда /start для нового підписника"""
     user = update.effective_user
     user_id = user.id
-    
-    # Сохранить в список подписчиков
+
+    # Зберегти в список підписників
     subscribers = load_json(STATE_DIR / "subscribers.json", {})
     subscribers[str(user_id)] = {
         "name": user.first_name,
@@ -130,43 +142,81 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "status": "active"
     }
     save_json(STATE_DIR / "subscribers.json", subscribers)
-    
+
     welcome_text = (
-        f"👋 Привет, {user.first_name}!\n\n"
-        "🤖 Я помогаю найти лучшие AI инструменты для заработка\n\n"
-        "📌 Подписались на канал? Отлично!\n"
-        "📚 Здесь вы найдёте:\n"
-        "• Промпты для ChatGPT\n"
-        "• Гайды по Midjourney\n"
-        "• Способы заработка на AI\n\n"
-        "🔗 Переходите в канал: @AI_NA_KAGDIY_DEN"
+        f"👋 Привіт, {user.first_name}!\n\n"
+        "🤖 Я допомагаю знайти найкращі AI-інструменти для заробітку\n\n"
+        "📚 Тут щодня публікуємо:\n"
+        "• Промпти для ChatGPT\n"
+        "• Гайди по Midjourney\n"
+        "• Способи заробітку на AI\n\n"
+        "📧 Хочете отримувати найкорисніші поради ще й на email?\n"
+        "Просто напишіть мені сюди свою пошту одним повідомленням "
+        "(наприклад: ivan@gmail.com) — і я додам вас у розсилку."
     )
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Перейти в канал", url="https://t.me/AI_NA_KAGDIY_DEN")],
-        [InlineKeyboardButton("💬 Наша группа", url="https://t.me/ai_na_kagdiy_den_chat")],
-    ])
-    
+
+    buttons = []
+    if CHANNEL_LINK:
+        buttons.append([InlineKeyboardButton("📢 Перейти в канал", url=CHANNEL_LINK)])
+    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
+
     await update.message.reply_text(welcome_text, reply_markup=keyboard)
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /stats для админа"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Доступ запрещён")
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробка звичайного тексту в ДМ боту.
+    Єдиний сценарій зараз — людина ділиться поштою для email-розсилки.
+    """
+    user = update.effective_user
+    text = (update.message.text or "").strip().lower()
+
+    if not EMAIL_REGEX.match(text):
+        await update.message.reply_text(
+            "🤔 Не схоже на email.\n\n"
+            "Якщо хочете отримувати поради на пошту — просто напишіть "
+            "її одним повідомленням, наприклад: ivan@gmail.com"
+        )
         return
-    
+
+    emails = load_json(EMAILS_FILE, {})
+    is_new = text not in emails
+    emails[text] = {
+        "telegram_id": user.id,
+        "name": user.first_name,
+        "joined": emails.get(text, {}).get("joined", datetime.now().isoformat()),
+    }
+    save_json(EMAILS_FILE, emails)
+
+    if is_new:
+        logger.info(f"📧 Нова email-підписка: {text}")
+        await update.message.reply_text(
+            "✅ Готово! Додав вас у розсилку.\n\n"
+            "Перший лист із добіркою промптів надішлю найближчим часом. "
+            "Дякую, що приєднались 💜"
+        )
+    else:
+        await update.message.reply_text("✅ Ця пошта вже є у розсилці — все гаразд!")
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /stats для адміністратора"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Доступ заборонено")
+        return
+
     subscribers = load_json(STATE_DIR / "subscribers.json", {})
     clicks = load_json(CLICKS_FILE, {})
+    emails = load_json(EMAILS_FILE, {})
     posted_index = load_json(POSTED_INDEX_FILE, {})
-    
+
     stats_text = (
-        f"📊 СТАТИСТИКА КАНАЛА\n\n"
-        f"👥 Подписчиков (ДМ): {len(subscribers)}\n"
-        f"🖱️ Кликов по кнопкам: {len(clicks)}\n"
-        f"📝 Постов опубликовано: {posted_index.get('index', 0)}\n"
-        f"📅 Последний пост: {posted_index.get('last_published', 'нет данных')}\n"
+        f"📊 СТАТИСТИКА КАНАЛУ\n\n"
+        f"👥 Підписників (ДМ боту): {len(subscribers)}\n"
+        f"📧 Email-підписників: {len(emails)}\n"
+        f"🖱️ Кліків по кнопках: {len(clicks)}\n"
+        f"📝 Постів опубліковано: {posted_index.get('index', 0)}\n"
+        f"📅 Останній пост: {posted_index.get('last_published', 'немає даних')}\n"
     )
-    
+
     await update.message.reply_text(stats_text)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -299,6 +349,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     # Запустить планировщик (использует app.job_queue)
     setup_scheduler(app)
