@@ -243,6 +243,28 @@ async def add_to_mailerlite(email: str, name: str = "") -> bool:
         logger.error(f"❌ Не вдалось з'єднатись з MailerLite: {e}")
         return False
 
+async def delete_from_mailerlite(email: str) -> bool:
+    """Видалити підписника з MailerLite (використовується для прибирання тестових записів)."""
+    if not MAILERLITE_API_KEY:
+        return False
+    headers = {
+        "Authorization": f"Bearer {MAILERLITE_API_KEY}",
+        "Accept": "application/json",
+    }
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            url = f"{MAILERLITE_API_URL}/{email}"
+            async with session.delete(url, headers=headers) as resp:
+                ok = resp.status in (200, 204)
+                if not ok:
+                    body = await resp.text()
+                    logger.warning(f"⚠️ Не вдалось видалити {email} з MailerLite: {resp.status} {body[:200]}")
+                return ok
+    except Exception as e:
+        logger.warning(f"⚠️ Помилка видалення {email} з MailerLite: {e}")
+        return False
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обробка звичайного тексту в ДМ боту.
@@ -300,6 +322,65 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(stats_text)
+
+async def selftest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Адмін-команда: наскрізна діагностика email → MailerLite на РЕАЛЬНОМУ
+    продакшн-оточенні (справжній ключ, справжній API-виклик, не мок).
+
+    Навіщо це потрібно: єдиний спосіб змусити handle_text() реально
+    спрацювати — щоб хтось написав боту повідомлення як звичайний
+    Telegram-користувач. Ані Railway API, ані GitHub API, ані MailerLite
+    API не дають змоги симулювати "користувач написав в Telegram" ззовні
+    — це вимагає живого акаунту. /selftest — найближче до цього, що можна
+    автоматизувати: один рядок від адміна замість повного ручного сценарію,
+    і перевіряється справжній продакшн-виклик, а не локальний мок.
+    """
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Доступ заборонено")
+        return
+
+    test_email = f"selftest-{int(datetime.now().timestamp())}@example.com"
+    await update.message.reply_text(f"🔬 Запускаю самоперевірку ({test_email})...")
+
+    # 1. Локальне збереження — та сама логіка, що й у handle_text
+    emails = load_json(EMAILS_FILE, {})
+    emails[test_email] = {
+        "telegram_id": update.effective_user.id,
+        "name": "SelfTest",
+        "joined": datetime.now().isoformat(),
+    }
+    save_json(EMAILS_FILE, emails)
+    local_ok = test_email in load_json(EMAILS_FILE, {})
+
+    # 2. РЕАЛЬНИЙ виклик MailerLite API (продакшн-ключ, не мок)
+    ml_ok = await add_to_mailerlite(test_email, "SelfTest")
+
+    # 3. Прибрати за собою — і локально, і в MailerLite
+    emails = load_json(EMAILS_FILE, {})
+    emails.pop(test_email, None)
+    save_json(EMAILS_FILE, emails)
+
+    ml_cleanup_ok = True
+    if ml_ok:
+        ml_cleanup_ok = await delete_from_mailerlite(test_email)
+
+    all_ok = local_ok and ml_ok
+    result_text = (
+        "🔬 РЕЗУЛЬТАТ САМОПЕРЕВІРКИ\n\n"
+        f"{'✅' if local_ok else '❌'} Локальне збереження (emails.json на Volume)\n"
+        f"{'✅' if ml_ok else '❌'} Синхронізація з MailerLite (справжній API-виклик)\n"
+        f"{'✅' if ml_cleanup_ok else '⚠️'} Тестовий запис прибрано\n\n"
+    )
+    if all_ok:
+        result_text += (
+            "✅ Все працює на продакшені. Коли реальна людина напише "
+            "email боту — станеться те саме, що й тут."
+        )
+    else:
+        result_text += "⚠️ Є проблема — перевір логи Railway для деталей (get-logs)."
+
+    await update.message.reply_text(result_text)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка клика по кнопке"""
@@ -433,6 +514,7 @@ def main():
     # Добавить обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("selftest", selftest))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
