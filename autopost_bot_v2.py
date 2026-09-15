@@ -12,6 +12,7 @@ from datetime import datetime, time as dtime
 from pathlib import Path
 
 import pytz
+import aiohttp
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -46,6 +47,11 @@ EMAILS_FILE = STATE_DIR / "emails.json"
 # Копія posts.json, що постачається разом з кодом у репозиторії
 # (використовується як джерело для "посіву" Volume при першому запуску)
 BUNDLED_POSTS_FILE = Path(__file__).resolve().parent / "posts.json"
+
+# MailerLite — пряма синхронізація email-підписок (без ручного експорту)
+MAILERLITE_API_KEY = os.getenv("MAILERLITE_API_KEY", "").strip()
+MAILERLITE_GROUP_ID = os.getenv("MAILERLITE_GROUP_ID", "198654174922016019").strip()
+MAILERLITE_API_URL = "https://connect.mailerlite.com/api/subscribers"
 
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -200,6 +206,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(welcome_text, reply_markup=keyboard)
 
+async def add_to_mailerlite(email: str, name: str = "") -> bool:
+    """
+    Додати підписника напряму в MailerLite через Connect API.
+
+    Best-effort: якщо MailerLite недоступний, ключ не заданий, чи стався
+    будь-який мережевий збій — функція просто повертає False і пише в
+    лог, НЕ кидає виняток. Локальний запис в emails.json (джерело
+    правди) відбувається окремо і завжди спрацьовує незалежно від
+    результату цього виклику.
+    """
+    if not MAILERLITE_API_KEY:
+        logger.warning("⚠️ MAILERLITE_API_KEY не задано — синхронізація пропущена")
+        return False
+
+    headers = {
+        "Authorization": f"Bearer {MAILERLITE_API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    payload = {"email": email, "groups": [MAILERLITE_GROUP_ID]}
+    if name:
+        payload["fields"] = {"name": name}
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(MAILERLITE_API_URL, json=payload, headers=headers) as resp:
+                if resp.status in (200, 201):
+                    logger.info(f"✅ {email} синхронізовано в MailerLite")
+                    return True
+                body = await resp.text()
+                logger.error(f"❌ MailerLite API помилка {resp.status}: {body[:300]}")
+                return False
+    except Exception as e:
+        logger.error(f"❌ Не вдалось з'єднатись з MailerLite: {e}")
+        return False
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обробка звичайного тексту в ДМ боту.
@@ -227,6 +270,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_new:
         logger.info(f"📧 Нова email-підписка: {text}")
+        await add_to_mailerlite(text, user.first_name)
         await update.message.reply_text(
             "✅ Готово! Додав вас у розсилку.\n\n"
             "Перший лист із добіркою промптів надішлю найближчим часом. "
