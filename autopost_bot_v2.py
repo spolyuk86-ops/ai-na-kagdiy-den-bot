@@ -43,6 +43,10 @@ CLICKS_FILE = STATE_DIR / "clicks.json"
 AFFILIATE_TRACKING_FILE = STATE_DIR / "affiliate_tracking.json"
 EMAILS_FILE = STATE_DIR / "emails.json"
 
+# Копія posts.json, що постачається разом з кодом у репозиторії
+# (використовується як джерело для "посіву" Volume при першому запуску)
+BUNDLED_POSTS_FILE = Path(__file__).resolve().parent / "posts.json"
+
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Временные пояса (Киев)
@@ -72,6 +76,40 @@ def load_json(file_path, default=None):
     except Exception as e:
         logger.error(f"Ошибка загрузки {file_path}: {e}")
     return default if default else {}
+
+def seed_posts_if_needed():
+    """
+    Скопіювати posts.json з репозиторію на Volume при першому запуску.
+
+    ВАЖЛИВО: POSTS_FILE (/data/posts.json) живе на persistent Volume і
+    спочатку ПОРОЖНІЙ — Volume не знає нічого про файли з git-репозиторію.
+    Без цього кроку get_next_post() завжди отримує порожній список і
+    publish_post() щоразу мовчки (з точки зору Telegram) падає з
+    "Нет постов в очереди", хоча планувальник при цьому спрацьовує
+    абсолютно вчасно — саме так і сталось на проді 13-14 вересня.
+
+    Копіюємо лише якщо на Volume ще НІЧОГО немає — якщо там вже є
+    posts.json (з попереднім прогресом посту), він має пріоритет і не
+    перезаписується автоматично при кожному деплої.
+    """
+    if POSTS_FILE.exists():
+        try:
+            existing = json.loads(POSTS_FILE.read_text(encoding="utf-8"))
+            logger.info(f"📋 posts.json вже є на Volume ({len(existing)} постів) — залишаємо як є")
+            return
+        except Exception as e:
+            logger.warning(f"⚠️ posts.json на Volume пошкоджений ({e}), пересіваємо з репозиторію")
+
+    if BUNDLED_POSTS_FILE.exists():
+        import shutil
+        shutil.copy(BUNDLED_POSTS_FILE, POSTS_FILE)
+        posts = json.loads(BUNDLED_POSTS_FILE.read_text(encoding="utf-8"))
+        logger.info(f"✅ posts.json посіяно на Volume з репозиторію ({len(posts)} постів)")
+    else:
+        logger.error(
+            f"❌ Немає posts.json ні на Volume ({POSTS_FILE}), "
+            f"ні в репозиторії ({BUNDLED_POSTS_FILE}) — черга буде порожньою!"
+        )
 
 def save_json(file_path, data):
     """Сохранить JSON безопасно"""
@@ -344,6 +382,9 @@ def main():
 
     # Создать приложение
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Посіяти posts.json на Volume, якщо його там ще немає
+    seed_posts_if_needed()
 
     # Добавить обработчики
     app.add_handler(CommandHandler("start", start))
