@@ -13,10 +13,18 @@ from pathlib import Path
 
 import pytz
 import aiohttp
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from monetization import (
+    affiliate_disclosure,
+    affiliate_url,
+    lead_magnet_url as build_lead_magnet_url,
+    missing_affiliate_configuration,
+)
+from lead_magnets import LEAD_MAGNET_DIR, LEAD_MAGNETS, lead_magnet
+from products import PRODUCTS, product, product_file
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Update
 from telegram.error import TelegramError
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
+    Application, CommandHandler, CallbackQueryHandler, PreCheckoutQueryHandler,
     MessageHandler, ContextTypes, filters,
 )
 
@@ -37,12 +45,24 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 # Якщо не задано — кнопка "Перейти в канал" просто не показується.
 CHANNEL_LINK = os.getenv("CHANNEL_LINK", "").strip()
 
+# Конверсійна воронка. BOT_USERNAME потрібен лише для кнопки з лід-магнітом
+# (наприклад, "ai_na_kagdiy_den_bot", без @). Не вигадуємо affiliate URL у
+# коді: для кожного партнера власник каналу задає свій verified referral URL
+# в Railway як AFFILIATE_URL_<PARTNER_ID>. Приклад: AFFILIATE_URL_MIDJOURNEY.
+BOT_USERNAME = os.getenv("BOT_USERNAME", "").strip().lstrip("@")
+LEAD_MAGNET_TITLE = os.getenv("LEAD_MAGNET_TITLE", "Безкоштовний набір AI-промптів").strip()
+LEAD_MAGNET_DELIVERY_URL = os.getenv("LEAD_MAGNET_DELIVERY_URL", "").strip()
+OWN_OFFER_URL = os.getenv("OWN_OFFER_URL", "").strip()
+OWN_OFFER_TITLE = os.getenv("OWN_OFFER_TITLE", "Практичний AI-гайд").strip()
+PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN", "").strip()
+
 # Файлы состояния
 POSTS_FILE = STATE_DIR / "posts.json"
 POSTED_INDEX_FILE = STATE_DIR / "posted_index.json"
 CLICKS_FILE = STATE_DIR / "clicks.json"
 AFFILIATE_TRACKING_FILE = STATE_DIR / "affiliate_tracking.json"
 EMAILS_FILE = STATE_DIR / "emails.json"
+ORDERS_FILE = STATE_DIR / "orders.json"
 
 # Копія posts.json, що постачається разом з кодом у репозиторії
 # (використовується як джерело для "посіву" Volume при першому запуску)
@@ -169,6 +189,10 @@ def track_click(button_text, partner, post_id):
     save_json(CLICKS_FILE, clicks)
     logger.info(f"✅ Клик отслежен: {button_text} ({partner})")
 
+def lead_magnet_url() -> str:
+    """Створити deep-link до бота, який фіксує джерело ліда."""
+    return build_lead_magnet_url(BOT_USERNAME)
+
 # ============================================================================
 # КОМАНДЫ БОТА
 # ============================================================================
@@ -180,13 +204,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Зберегти в список підписників
     subscribers = load_json(STATE_DIR / "subscribers.json", {})
+    start_source = context.args[0] if context.args else "direct"
+    selected_magnet = lead_magnet(start_source.removeprefix("lead_")) if start_source.startswith("lead_") else None
     subscribers[str(user_id)] = {
         "name": user.first_name,
-        "joined": datetime.now().isoformat(),
-        "status": "active"
+        "joined": subscribers.get(str(user_id), {}).get("joined", datetime.now().isoformat()),
+        "status": "active",
+        "source": start_source,
+        "lead_magnet": start_source.removeprefix("lead_") if selected_magnet else "",
     }
     save_json(STATE_DIR / "subscribers.json", subscribers)
 
+    selected_title = selected_magnet[0] if selected_magnet else LEAD_MAGNET_TITLE
+    lead_magnet_intro = (
+        f"\n\n🎁 Ви прийшли за матеріалом «{selected_title}». "
+        "Залиште email одним повідомленням — надішлю його туди."
+        if selected_magnet or start_source == "guide" else ""
+    )
     welcome_text = (
         f"👋 Привіт, {user.first_name}!\n\n"
         "🤖 Я допомагаю знайти найкращі AI-інструменти для заробітку\n\n"
@@ -197,6 +231,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📧 Хочете отримувати найкорисніші поради ще й на email?\n"
         "Просто напишіть мені сюди свою пошту одним повідомленням "
         "(наприклад: ivan@gmail.com) — і я додам вас у розсилку."
+        + lead_magnet_intro
     )
 
     buttons = []
@@ -293,11 +328,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_new:
         logger.info(f"📧 Нова email-підписка: {text}")
         await add_to_mailerlite(text, user.first_name)
+        delivery_line = (
+            f"\n\n🎁 Ваш матеріал: {LEAD_MAGNET_DELIVERY_URL}"
+            if LEAD_MAGNET_DELIVERY_URL else ""
+        )
         await update.message.reply_text(
             "✅ Готово! Додав вас у розсилку.\n\n"
             "Перший лист із добіркою промптів надішлю найближчим часом. "
-            "Дякую, що приєднались 💜"
+            "Дякую, що приєднались 💜" + delivery_line
         )
+        subscriber = load_json(STATE_DIR / "subscribers.json", {}).get(str(user.id), {})
+        selected_magnet = lead_magnet(subscriber.get("lead_magnet", ""))
+        if selected_magnet:
+            title, filename = selected_magnet
+            document_path = LEAD_MAGNET_DIR / filename
+            if document_path.is_file():
+                with document_path.open("rb") as document:
+                    await update.message.reply_document(
+                        document=document,
+                        filename=filename,
+                        caption=f"🎁 {title}\n\nЗбережіть файл і використайте один інструмент уже сьогодні.",
+                    )
+            else:
+                logger.error(f"❌ Не знайдено файл лідмагніту: {document_path}")
     else:
         await update.message.reply_text("✅ Ця пошта вже є у розсилці — все гаразд!")
 
@@ -309,19 +362,83 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     subscribers = load_json(STATE_DIR / "subscribers.json", {})
     clicks = load_json(CLICKS_FILE, {})
+    affiliate_impressions = load_json(AFFILIATE_TRACKING_FILE, {})
     emails = load_json(EMAILS_FILE, {})
+    orders = load_json(ORDERS_FILE, {})
     posted_index = load_json(POSTED_INDEX_FILE, {})
+    paid_total = sum(order.get("amount", 0) for order in orders.values() if order.get("currency") == "UAH") / 100
 
     stats_text = (
         f"📊 СТАТИСТИКА КАНАЛУ\n\n"
         f"👥 Підписників (ДМ боту): {len(subscribers)}\n"
         f"📧 Email-підписників: {len(emails)}\n"
-        f"🖱️ Кліків по кнопках: {len(clicks)}\n"
+        f"🖱️ Legacy-кліків по кнопках: {len(clicks)}\n"
+        f"👀 Показів affiliate-посилань: {len(affiliate_impressions)}\n"
+        f"💳 Оплачених інструментів: {len(orders)} ({paid_total:.0f} грн)\n"
         f"📝 Постів опубліковано: {posted_index.get('index', 0)}\n"
         f"📅 Останній пост: {posted_index.get('last_published', 'немає даних')}\n"
     )
 
     await update.message.reply_text(stats_text)
+
+async def offer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показати власний продукт: найкоротший шлях до маржинального доходу."""
+    if not OWN_OFFER_URL:
+        await update.message.reply_text("🎁 Скоро тут з'явиться практична пропозиція. Слідкуйте за каналом!")
+        return
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"✨ Отримати: {OWN_OFFER_TITLE}", url=OWN_OFFER_URL)]])
+    await update.message.reply_text(
+        f"✨ {OWN_OFFER_TITLE}\n\nПрактичний матеріал, щоб швидше отримати результат з AI.",
+        reply_markup=keyboard,
+    )
+
+async def gifts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показати 10 lead magnet-ів і привести читача у email-воронку."""
+    if not BOT_USERNAME:
+        await update.message.reply_text("⚠️ Подарунки тимчасово налаштовуються. Спробуйте трохи пізніше.")
+        return
+    rows = [
+        [InlineKeyboardButton(f"🎁 {title}", url=f"https://t.me/{BOT_USERNAME}?start=lead_{slug}")]
+        for slug, (title, _) in LEAD_MAGNETS.items()
+    ]
+    await update.message.reply_text(
+        "🎁 Оберіть безкоштовний матеріал. Після короткої email-підписки бот надішле файл сюди.",
+        reply_markup=InlineKeyboardMarkup(rows),
+    )
+
+async def tools_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вітрина low-ticket інструментів для малого бізнесу."""
+    rows = [
+        [InlineKeyboardButton(f"🛠 {item['title']} — {item['price_uah']} грн", callback_data=f"buy|{slug}")]
+        for slug, item in PRODUCTS.items()
+    ]
+    await update.message.reply_text(
+        "🛠 ГОТОВІ AI-ІНСТРУМЕНТИ ДЛЯ БІЗНЕСУ\n\n"
+        "Оберіть один конкретний процес: після оплати бот одразу надішле "
+        "інструкцію, шаблон і воронку впровадження.",
+        reply_markup=InlineKeyboardMarkup(rows),
+    )
+
+async def monetization_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Адмін-чекліст: виявляє налаштування, без яких воронка не заробляє."""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Доступ заборонено")
+        return
+    missing = missing_affiliate_configuration(load_json(POSTS_FILE, []))
+    affiliate_state = "✅ Усі affiliate URL налаштовані" if not missing else (
+        "⚠️ Потрібні персональні referral URL:\n" +
+        "\n".join(f"• AFFILIATE_URL_{partner.upper()}" for partner in missing)
+    )
+    text = (
+        "💸 СТАН МОНЕТИЗАЦІЇ\n\n"
+        f"{'✅' if BOT_USERNAME else '⚠️'} BOT_USERNAME (lead magnet): {'налаштовано' if BOT_USERNAME else 'не задано'}\n"
+        f"{'✅' if LEAD_MAGNET_DELIVERY_URL else '⚠️'} LEAD_MAGNET_DELIVERY_URL: {'налаштовано' if LEAD_MAGNET_DELIVERY_URL else 'не задано'}\n"
+        f"{'✅' if OWN_OFFER_URL else '⚠️'} OWN_OFFER_URL: {'налаштовано' if OWN_OFFER_URL else 'не задано'}\n\n"
+        f"{affiliate_state}\n\n"
+        "Порада: спочатку налаштуйте lead magnet і власну пропозицію, "
+        "потім замініть кожне generic-посилання персональним affiliate URL."
+    )
+    await update.message.reply_text(text)
 
 async def selftest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -386,8 +503,28 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка клика по кнопке"""
     query = update.callback_query
     await query.answer()
-    
-    data = query.data.split("|")  # Формат: partner|post_id|url
+
+    data = query.data.split("|")
+    if len(data) == 2 and data[0] == "buy":
+        slug = data[1]
+        item = product(slug)
+        if not item:
+            await query.message.reply_text("❌ Цей інструмент не знайдено.")
+            return
+        if not PAYMENT_PROVIDER_TOKEN:
+            logger.error("❌ PAYMENT_PROVIDER_TOKEN не задано — інвойс не створено")
+            await query.message.reply_text("⚠️ Оплата тимчасово недоступна. Напишіть адміністратору каналу.")
+            return
+        await context.bot.send_invoice(
+            chat_id=query.message.chat_id,
+            title=item["title"],
+            description=f"Готовий інструмент: {item['pain']}.",
+            payload=f"tool:{slug}",
+            provider_token=PAYMENT_PROVIDER_TOKEN,
+            currency="UAH",
+            prices=[LabeledPrice(item["title"], item["price_uah"] * 100)],
+        )
+        return
     
     if len(data) >= 3:
         partner, post_id, url = data[0], data[1], data[2]
@@ -397,6 +534,48 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Переход на {partner}...\n"
             f"<a href='{url}'>Нажмите здесь если не открылось</a>",
             parse_mode="HTML"
+        )
+
+async def pre_checkout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Підтвердити лише інвойс відомого інструменту та його точну суму."""
+    query = update.pre_checkout_query
+    payload = query.invoice_payload
+    slug = payload.removeprefix("tool:") if payload.startswith("tool:") else ""
+    item = product(slug)
+    valid = bool(item) and query.currency == "UAH" and query.total_amount == item["price_uah"] * 100
+    if valid:
+        await query.answer(ok=True)
+    else:
+        logger.warning(f"⚠️ Відхилено некоректну оплату: {payload}")
+        await query.answer(ok=False, error_message="Не вдалося перевірити товар. Спробуйте ще раз.")
+
+async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Зберегти замовлення та автоматично видати оплачений інструмент."""
+    payment = update.message.successful_payment
+    payload = payment.invoice_payload
+    slug = payload.removeprefix("tool:") if payload.startswith("tool:") else ""
+    item, document_path = product(slug), product_file(slug)
+    if not item or not document_path or not document_path.is_file():
+        logger.error(f"❌ Оплачений товар не знайдено: {payload}")
+        await update.message.reply_text("✅ Оплату отримано. Адміністратор надішле матеріал найближчим часом.")
+        return
+
+    orders = load_json(ORDERS_FILE, {})
+    charge_id = payment.telegram_payment_charge_id
+    orders[charge_id] = {
+        "product": slug,
+        "amount": payment.total_amount,
+        "currency": payment.currency,
+        "telegram_id": update.effective_user.id,
+        "timestamp": datetime.now().isoformat(),
+    }
+    save_json(ORDERS_FILE, orders)
+    with document_path.open("rb") as document:
+        await update.message.reply_document(
+            document=document,
+            filename=document_path.name,
+            caption=(f"✅ Оплату отримано. Ваш інструмент: {item['title']}\n\n"
+                     "Почніть із розділу «Впровадження сьогодні»."),
         )
 
 # ============================================================================
@@ -423,10 +602,32 @@ async def publish_post(context: ContextTypes.DEFAULT_TYPE):
         if buttons:
             button_rows = []
             for btn in buttons:
-                callback_data = f"{btn['partner']}|{index}|{btn['url']}"
                 button_rows.append([
-                    InlineKeyboardButton(btn["text"], callback_data=callback_data)
+                    # URL-кнопка відкриває сторінку одразу. Callback вимагав
+                    # зайвого кліку, ламався на URL >64 байтів і знижував CR.
+                    InlineKeyboardButton(
+                        btn["text"],
+                        url=affiliate_url(btn["partner"], btn["url"]),
+                    )
                 ])
+            text = affiliate_disclosure(text, has_affiliate_button=True)
+            tracking = load_json(AFFILIATE_TRACKING_FILE, {})
+            tracking[f"impression_{post_data.get('id', index)}_{int(datetime.now().timestamp())}"] = {
+                "post_id": post_data.get("id", index),
+                "timestamp": datetime.now().isoformat(),
+                "partners": [btn["partner"] for btn in buttons],
+                "event": "affiliate_link_impression",
+            }
+            save_json(AFFILIATE_TRACKING_FILE, tracking)
+
+        magnet_url = lead_magnet_url()
+        if magnet_url:
+            button_rows = button_rows if buttons else []
+            button_rows.append([InlineKeyboardButton(f"🎁 Забрати: {LEAD_MAGNET_TITLE}", url=magnet_url)])
+        if OWN_OFFER_URL:
+            button_rows = button_rows if (buttons or magnet_url) else []
+            button_rows.append([InlineKeyboardButton(f"✨ {OWN_OFFER_TITLE}", url=OWN_OFFER_URL)])
+        if button_rows:
             keyboard = InlineKeyboardMarkup(button_rows)
         
         # Опубликовать
@@ -514,8 +715,14 @@ def main():
     # Добавить обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("offer", offer))
+    app.add_handler(CommandHandler("gifts", gifts))
+    app.add_handler(CommandHandler("tools", tools_catalog))
+    app.add_handler(CommandHandler("monetization", monetization_status))
     app.add_handler(CommandHandler("selftest", selftest))
     app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(PreCheckoutQueryHandler(pre_checkout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     # Запустить планировщик (использует app.job_queue)

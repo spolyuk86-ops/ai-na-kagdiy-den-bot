@@ -48,6 +48,7 @@ posted_news.json
 clicks.json
 subscribers.json
 affiliate_tracking.json
+orders.json
 /data/
 
 # Logs
