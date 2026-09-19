@@ -62,6 +62,15 @@ cp .env.example .env
 BOT_TOKEN=123456789:ABCdefGHIjklmnoPQRstuvWXYZ...
 CHANNEL_ID=-1001234567890
 ADMIN_ID=123456789
+CHANNEL_LINK=https://t.me/your_channel
+
+# Conversion funnel (required to monetize rather than only publish content)
+BOT_USERNAME=your_bot_username
+LEAD_MAGNET_DELIVERY_URL=https://your-domain.example/free-ai-prompts
+OWN_OFFER_URL=https://your-domain.example/ai-guide
+
+# Use your approved partner/referral URL, not a generic home-page URL
+AFFILIATE_URL_MIDJOURNEY=https://partner.example/your-referral-link
 ```
 
 ### 4. Тест локально
@@ -78,6 +87,54 @@ git push origin main
 ```
 
 **Готово! Бот работает 24/7! 🎉**
+
+### 6. Налаштуйте конверсію до першого поста
+
+Автопостинг сам по собі не є бізнес-моделлю: generic-посилання на головну
+сторінку партнера не зараховує комісію, а читач без CTA не потрапляє у вашу
+базу. Заповніть усі значення з [`.env.example`](./.env.example) у Railway:
+
+1. Додайте **ваш підтверджений персональний referral URL** у
+   `AFFILIATE_URL_<PARTNER_ID>` для кожного партнера. Бот бере його замість
+   generic URL у `posts.json`; це дозволяє змінити посилання без редеплою.
+2. Створіть простий lead magnet (наприклад, PDF «50 AI-промптів») і задайте
+   `BOT_USERNAME` та `LEAD_MAGNET_DELIVERY_URL`. У кожному пості з'явиться
+   deep-link-кнопка: читач переходить у бот, бот фіксує джерело `guide` та
+   збирає email.
+3. Додайте checkout або сторінку вашої послуги в `OWN_OFFER_URL`. Це створює
+   кнопку власного продукту в постах і команду `/offer` у боті — шлях до
+   маржинального доходу, незалежного від affiliate-програм.
+4. Напишіть боту `/monetization` від `ADMIN_ID`. Команда покаже відсутні
+   referral URL та незавершені частини воронки. Не публікуйте продажний пост,
+   доки цей чекліст містить попередження.
+
+> URL-кнопки тепер відкривають пропозицію одразу. Це навмисно: попередня
+> callback-механіка вимагала від читача другого кліку та могла перевищити
+> Telegram-ліміт 64 байтів для callback data, зменшуючи конверсію.
+
+### 7. Запустіть 10 lead magnet-ів
+
+У каталозі [`lead_magnets/`](./lead_magnets/README.md) є десять готових
+україномовних матеріалів: від промптів для продажів і плану першого $100 до
+email-серії та відповідей на заперечення. Після налаштування `BOT_USERNAME`
+команда `/gifts` показує їх читачеві. Кнопка веде на безпечний deep link,
+після email-підписки бот одразу надсилає обраний `.md`-файл у чат.
+
+### 8. Продаж мініінструментів і приймання оплат
+
+Каталог [`business_tools/`](./business_tools/README.md) містить 10
+впроваджуваних low-ticket продуктів для малого бізнесу. Кожен має конкретний
+біль, інструкцію запуску, AI-шаблон, міні-воронку і KPI. Команда `/tools`
+показує вітрину, створює Telegram invoice в UAH, перевіряє суму на
+pre-checkout і після підтвердженої оплати автоматично видає файл покупцеві.
+
+1. У BotFather підключіть схваленого Telegram payment provider та додайте
+   production token як `PAYMENT_PROVIDER_TOKEN` у Railway.
+2. Пройдіть тестовий платіж у Telegram Payments до будь-якого анонсу.
+3. Запустіть пост: проблема → безкоштовний lead magnet → 3–5 корисних листів
+   → `/tools` → продукт за 290–490 грн → пропозиція впровадження як апсел.
+4. Щотижня дивіться `orders.json` на Railway Volume: продажі за інструментом,
+   середній чек і запити покупців. Масштабуйте лише інструменти з оплатами.
 
 ---
 
