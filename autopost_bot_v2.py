@@ -597,10 +597,12 @@ async def publish_post(context: ContextTypes.DEFAULT_TYPE):
         buttons = post_data.get("buttons", [])
         image_url = post_data.get("image", None)
         
-        # Построить клавиатуру
+        # Построить клавиатуру. Инициализируем строки заранее: пост может не
+        # иметь партнерских кнопок, а URL лид-магнита и собственного оффера
+        # при этом также могут быть не заданы.
         keyboard = None
+        button_rows = []
         if buttons:
-            button_rows = []
             for btn in buttons:
                 button_rows.append([
                     # URL-кнопка відкриває сторінку одразу. Callback вимагав
