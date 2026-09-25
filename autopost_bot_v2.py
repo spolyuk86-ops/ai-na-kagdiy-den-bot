@@ -599,8 +599,9 @@ async def publish_post(context: ContextTypes.DEFAULT_TYPE):
         
         # Построить клавиатуру
         keyboard = None
+        button_rows = []  # инициализация ДО всех условий — фикс NameError,
+                           # когда пост без кнопок и BOT_USERNAME/OWN_OFFER_URL не заданы
         if buttons:
-            button_rows = []
             for btn in buttons:
                 button_rows.append([
                     # URL-кнопка відкриває сторінку одразу. Callback вимагав
@@ -622,10 +623,8 @@ async def publish_post(context: ContextTypes.DEFAULT_TYPE):
 
         magnet_url = lead_magnet_url()
         if magnet_url:
-            button_rows = button_rows if buttons else []
             button_rows.append([InlineKeyboardButton(f"🎁 Забрати: {LEAD_MAGNET_TITLE}", url=magnet_url)])
         if OWN_OFFER_URL:
-            button_rows = button_rows if (buttons or magnet_url) else []
             button_rows.append([InlineKeyboardButton(f"✨ {OWN_OFFER_TITLE}", url=OWN_OFFER_URL)])
         if button_rows:
             keyboard = InlineKeyboardMarkup(button_rows)
@@ -651,7 +650,9 @@ async def publish_post(context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"✅ Пост #{index + 1} опубликован в {datetime.now().strftime('%H:%M')}")
         
     except TelegramError as e:
-        logger.error(f"❌ Ошибка публикации: {e}")
+        logger.error(f"❌ Ошибка публикации Telegram: {e}")
+    except Exception as e:
+        logger.error(f"❌ Непредвиденная ошибка публикации поста #{index}: {e}", exc_info=True)
 
 # ============================================================================
 # ИНИЦИАЛИЗАЦИЯ ПЛАНИРОВЩИКА
