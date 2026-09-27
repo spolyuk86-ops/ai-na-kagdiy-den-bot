@@ -114,17 +114,55 @@ def seed_posts_if_needed():
     "Нет постов в очереди", хоча планувальник при цьому спрацьовує
     абсолютно вчасно — саме так і сталось на проді 13-14 вересня.
 
-    Копіюємо лише якщо на Volume ще НІЧОГО немає — якщо там вже є
-    posts.json (з попереднім прогресом посту), він має пріоритет і не
-    перезаписується автоматично при кожному деплої.
+    Якщо на Volume вже є posts.json — прогрес черги (posted_index.json)
+    має пріоритет, тому ми НЕ перезаписуємо існуючі пости і НЕ змінюємо
+    їх порядок. Але якщо в репозиторії з'явились нові пости (додані в
+    кінець списку, ids яких ще немає на Volume), домерджуємо їх у кінець
+    існуючого файлу — це не зсуває позиції вже опублікованих постів,
+    тож посилання posted_index.json на позицію в списку лишається вірним.
+
+    Автомердж вмикається лише якщо перші len(existing) постів у
+    репозиторії співпадають за id й порядком з тим, що вже на Volume —
+    інакше (порядок змінився вручну) мердж пропускається, щоб не
+    зламати прогрес мовчки.
     """
     if POSTS_FILE.exists():
         try:
             existing = json.loads(POSTS_FILE.read_text(encoding="utf-8"))
-            logger.info(f"📋 posts.json вже є на Volume ({len(existing)} постів) — залишаємо як є")
-            return
         except Exception as e:
             logger.warning(f"⚠️ posts.json на Volume пошкоджений ({e}), пересіваємо з репозиторію")
+            existing = None
+
+        if existing is not None:
+            if not BUNDLED_POSTS_FILE.exists():
+                logger.info(f"📋 posts.json вже є на Volume ({len(existing)} постів) — залишаємо як є")
+                return
+
+            bundled = json.loads(BUNDLED_POSTS_FILE.read_text(encoding="utf-8"))
+            existing_ids_ordered = [p.get("id") for p in existing]
+            bundled_prefix_ids = [p.get("id") for p in bundled[: len(existing)]]
+
+            if bundled_prefix_ids != existing_ids_ordered:
+                logger.warning(
+                    "⚠️ Порядок/id постів у репозиторії відрізняється від Volume — "
+                    "автомердж пропущено, щоб не зламати прогрес черги. "
+                    f"Volume: {len(existing)} постів, залишаємо без змін."
+                )
+                return
+
+            existing_ids = set(existing_ids_ordered)
+            new_posts = [p for p in bundled if p.get("id") not in existing_ids]
+
+            if new_posts:
+                merged = existing + new_posts
+                save_json(POSTS_FILE, merged)
+                logger.info(
+                    f"➕ Домерджено {len(new_posts)} нових постів з репозиторію на Volume "
+                    f"(було {len(existing)}, стало {len(merged)}), прогрес черги збережено"
+                )
+            else:
+                logger.info(f"📋 posts.json вже є на Volume ({len(existing)} постів) — нових немає, залишаємо як є")
+            return
 
     if BUNDLED_POSTS_FILE.exists():
         import shutil
